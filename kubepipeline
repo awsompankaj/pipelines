@@ -1,0 +1,83 @@
+pipeline {
+    agent any
+    parameters {
+        string(name: 'NAMESPACE', defaultValue: 'front', description: 'enter your namespace')
+    }
+    stages {
+        stage('Creating NameSpace') {
+           
+            steps {
+                echo "Creating Namespace ${params.NAMESPACE}"
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                sh '''
+                
+                curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+                
+                ls -ltra
+                
+                chmod 755 ./kubectl
+                ./kubectl create namespace ${NAMESPACE}
+                ./kubectl label namespace ${NAMESPACE} istio-injection=enabled
+                ./kubectl describe namespace ${NAMESPACE}
+                
+                '''
+    }
+            }
+        }
+        stage('Checkout git repo') {
+            
+            steps {
+               checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[url: 'https://github.com/awsompankaj/demok8app.git']]])
+                
+            }
+        }
+         stage('Implementing Services') {
+            
+           steps {
+                
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                sh '''
+                
+                curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+                
+                ls -ltra
+                
+                chmod 755 ./kubectl
+                
+                ./kubectl create -f ./kubernetes-manifests/ -n ${NAMESPACE}
+                ./kubectl get pods,svc -n ${NAMESPACE}
+                
+                
+                
+                '''
+            }
+  
+            }
+        }
+        stage('Creating Ingress Rule') {
+            
+            steps {
+               withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                sh '''
+                
+                curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+                
+                ls -ltra
+                
+                chmod 755 ./kubectl
+				
+				echo " creating ingress"
+                
+                sleep 15
+                
+                echo " creating ingress"
+                 sed -i "s/ENV/${NAMESPACE}/g" ingress.yml
+                 ./kubectl create -f ingress.yml -n ${NAMESPACE}
+                 ./kubectl describe ingress -n ${NAMESPACE}
+                
+				'''
+            }
+        }
+    }
+    }
+}
